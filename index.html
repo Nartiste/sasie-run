@@ -592,8 +592,8 @@ function buildSprites() {
     x.fillStyle = '#ff2a2a'; x.fillRect(14, 80, 42, 14); x.fillRect(w - 56, 80, 42, 14); x.fillStyle = 'rgba(255,150,150,.8)'; x.fillRect(16, 82, 14, 5); x.fillRect(w - 54, 82, 14, 5);
     x.fillStyle = '#ececec'; x.fillRect(w / 2 - 28, 100, 56, 15); x.fillStyle = '#222'; x.fillRect(16, h - 36, w - 32, 7);
   });
-  SPR.cars = [car('#3a6cb4', '#1f3e6e'), car('#f4f2ee', '#bdb8ad'), car('#34343a', '#141416'), car('#f2b600', '#a87c00'), car('#5f8a5a', '#35512f'), car('#8e2b8e', '#541854')].map(img => ({ ww: 720, img }));
-  SPR.van = { ww: 800, img: mk(230, 200, (x, w, h) => { x.fillStyle = 'rgba(0,0,0,.4)'; x.beginPath(); x.ellipse(w / 2, h - 8, 110, 13, 0, 0, 7); x.fill(); x.fillStyle = '#111'; x.fillRect(16, h - 40, 38, 32); x.fillRect(w - 54, h - 40, 38, 32); const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#c9c9c9'); x.fillStyle = g; x.fillRect(10, 12, w - 20, h - 36); x.fillStyle = '#8fb0c8'; x.fillRect(30, 22, w - 60, 42); x.fillStyle = '#ff2a2a'; x.fillRect(14, 100, 32, 18); x.fillRect(w - 46, 100, 32, 18); x.fillStyle = '#bbb'; x.fillRect(w / 2 - 1, 68, 2, h - 96); }) };
+  SPR.cars = [car('#3a6cb4', '#1f3e6e'), car('#f4f2ee', '#bdb8ad'), car('#34343a', '#141416'), car('#f2b600', '#a87c00'), car('#5f8a5a', '#35512f'), car('#8e2b8e', '#541854')].map(img => ({ ww: 1050, img }));   /* ≈ 80 % d'une voie : plus lisibles, toujours plus petites que la moto */
+  SPR.van = { ww: 1120, img: mk(230, 200, (x, w, h) => { x.fillStyle = 'rgba(0,0,0,.4)'; x.beginPath(); x.ellipse(w / 2, h - 8, 110, 13, 0, 0, 7); x.fill(); x.fillStyle = '#111'; x.fillRect(16, h - 40, 38, 32); x.fillRect(w - 54, h - 40, 38, 32); const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#c9c9c9'); x.fillStyle = g; x.fillRect(10, 12, w - 20, h - 36); x.fillStyle = '#8fb0c8'; x.fillRect(30, 22, w - 60, 42); x.fillStyle = '#ff2a2a'; x.fillRect(14, 100, 32, 18); x.fillRect(w - 46, 100, 32, 18); x.fillStyle = '#bbb'; x.fillRect(w / 2 - 1, 68, 2, h - 96); }) };
   SPR.masc = { ww: 900, img: mk(150, 260, (x, w, h) => rider(x, w / 2, h - 30, .95, KIT, { pose: 'flag', t: 0, name: 'PILOTE SASIE' })) };
   SPR.masc2 = { ww: 900, img: mk(150, 260, (x, w, h) => rider(x, w / 2, h - 30, .95, KIT, { pose: 'flag', t: .35, name: 'PILOTE SASIE' })) };
 }
@@ -812,10 +812,10 @@ function update(dt) {
   const pz = G.pos + playerZ;
   for (const c of G.cars) {
     const rel = ((c.z - pz) % trackLen + trackLen) % trackLen, ahead = rel < trackLen / 2;
-    if (ahead && rel < SEG * .8 && G.speed > c.speed && Math.abs(c.x - G.x) < .26) {
+    if (ahead && rel < SEG * .8 && G.speed > c.speed && Math.abs(c.x - G.x) < .3) {
       G.speed = c.speed * .55; G.crashes++; G.shake = 1; G.flash = 1; c.z = inc(c.z, SEG * 3, trackLen); AU.crash(); msg('CHUTE ! −2 S', '#ff4a4a', true); G.time -= 2; spark(W / 2, H * .85, Y, 18, 200); if (navigator.vibrate) navigator.vibrate([60, 40, 60]); G.gear = Math.min(G.gear, 1);
     }
-    if (!ahead && rel > trackLen - SEG * 2 && !c.nearDone) { c.nearDone = true; const d = Math.abs(c.x - G.x); if (d < .5 && d >= .26 && G.speed > MAXV * .5) { G.near++; G.score += 50 + G.near * 5; AU.near(); msg('FRÔLÉ ! +' + (50 + G.near * 5), '#7fd3ff'); } }
+    if (!ahead && rel > trackLen - SEG * 2 && !c.nearDone) { c.nearDone = true; const d = Math.abs(c.x - G.x); if (d < .56 && d >= .3 && G.speed > MAXV * .5) { G.near++; G.score += 50 + G.near * 5; AU.near(); msg('FRÔLÉ ! +' + (50 + G.near * 5), '#7fd3ff'); } }
     if (ahead && rel > SEG * 4) c.nearDone = false;
   }
   updateCars(dt);
