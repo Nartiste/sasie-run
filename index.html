@@ -14,6 +14,7 @@
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; height: 100%; overflow: hidden; background: #0c0c0c; color: #fff; font-family: Inter, system-ui, sans-serif; touch-action: none; -webkit-user-select: none; user-select: none; overscroll-behavior: none; }
   #c { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; }
+  #hint { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; pointer-events: none; z-index: 6; }
   .screen { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: flex-start; padding: max(18px, env(safe-area-inset-top)) 20px max(18px, env(safe-area-inset-bottom)); text-align: center; z-index: 5; overflow-y: auto; touch-action: pan-y; }
   .screen.on { display: flex; }
   .screen > :first-child { margin-top: auto; } .screen > :nth-last-child(1 of :not(.foot)) { margin-bottom: auto; }
@@ -90,11 +91,12 @@
   .podium3 .p2 .b { height: 70px; background: linear-gradient(#cfd2d8, #8b8f97); color: #222; }
   .podium3 .p3 .b { height: 52px; background: linear-gradient(#d0864a, #8a4f22); }
   @media (min-height: 760px) { h1.title { font-size: 66px; } }
-  @media (min-width: 700px) { #c { left: 50%; width: 430px; transform: translateX(-50%); } .screen { left: 50%; width: 430px; transform: translateX(-50%); } #turbo { right: calc(50% - 199px); } #brake { left: calc(50% - 199px); } }
+  @media (min-width: 700px) { #c, #hint { left: 50%; width: 430px; transform: translateX(-50%); } .screen { left: 50%; width: 430px; transform: translateX(-50%); } #turbo { right: calc(50% - 199px); } #brake { left: calc(50% - 199px); } }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+<canvas id="hint" aria-hidden="true"></canvas>
 <button id="brake" class="pad" aria-label="Frein">FREIN</button>
 <button id="turbo" class="pad" aria-label="Turbo">TURBO</button>
 <button id="gear" aria-label="Réglages du pitch">⚙</button>
@@ -645,8 +647,8 @@ function useTurbo() { if (G.state !== 'run' || G.turbo < 1 || G.boost > 0) retur
 const INTRO_LEN = 11.6;
 function enterGate() { AU.init(); G.state = 'intro'; G.introT = 0; G.rpm = IDLE; G.introHold = false; G.holdIdx = 0; show(null); }
 $('gate').addEventListener('click', enterGate);
-/* règles présentées une par une : l'intro s'arrête sur chaque règle, le joueur appuie sur « Suivant » */
-const HOLDS = [5.0, 5.55, 6.1, 6.65, 7.2];
+/* l'intro attend le joueur : un toucher sur l'écran du magasin, puis « Suivant » une fois les règles lues */
+const HOLDS = [2.95, 5.75];   /* fin de l'écran du magasin, puis règles affichées */
 function releaseHold() { if (!G.introHold) return; G.introHold = false; G.holdIdx++; AU.blip(); }
 function introTap(x, y) {
   if (x > W - 150 && y > H - 54) { skipIntro(); return; }   /* « Passer l'intro » en bas à droite */
@@ -664,7 +666,7 @@ function updateIntro(dt) {
   G.rpm += (target - G.rpm) * Math.min(1, dt * 12);
   G.popT -= dt; if (((t > 1.1 && t < 1.7) || (t > 9.1 && t < 9.6)) && G.popT <= 0) { G.popT = .08 + Math.random() * .1; AU.pop(); }
   AU.engine(G.rpm, target > 5000 ? 1 : 0, true);
-  for (let i = 0; i < 5; i++) { const at = 4.7 + i * .55; if (prev < at && t >= at) AU.blip(); }
+  for (let i = 0; i < 5; i++) { const at = 4.7 + i * .2; if (prev < at && t >= at) AU.blip(); }
   if (prev < 7.5 && t >= 7.5) AU.check();
   if (t > INTRO_LEN) skipIntro();
 }
@@ -692,6 +694,7 @@ function drawIntro() {
     chip('4 000 m² D’ÉQUIPEMENT MOTO', H * .79, clamp((t - 1.3) * 4, 0, 1), true);
     chip('PONTAULT-COMBAULT · À 20 MIN DE PARIS', H * .85, clamp((t - 1.8) * 4, 0, 1));
     chip('AU BONHEUR DU MOTARD DEPUIS 1990', H * .905, clamp((t - 2.3) * 4, 0, 1));
+    if (G.introHold) { const pa = .65 + Math.sin(G.t * 5) * .35; ctx.globalAlpha = pa; txt('TOUCHE L’ÉCRAN POUR CONTINUER ›', cx, H * .955, 15, '#fff', 'center', 800, true, true); ctx.globalAlpha = 1; }
     if (t > 3.1) { ctx.fillStyle = `rgba(17,17,17,${(t - 3.1) / .3})`; ctx.fillRect(0, 0, W, H); }
   } else if (t < 8.6) {
     /* scène 2 : les règles du run, présentées par le pilote Sasie */
@@ -705,19 +708,20 @@ function drawIntro() {
     const mx = lerp(-W * .4, cx - W * .18, easeOut((t - 3.5) / .9));
     rider(ctx, mx, fy, sc, KIT, { t, walk: t < 4.4, pose: t > 7.4 ? 'thumb' : t > 4.6 ? 'wave' : 'stand', name: t > 4.4 ? 'PILOTE SASIE' : null });
     bubble(mx - 18, fy - 235 * sc, 'Je t’explique !', clamp((t - 4.5) * 4, 0, 1) * clamp((5.9 - t) * 4, 0, 1), 1);
-    const rules = [['GLISSE ← →', 'pour tourner'], ['FREIN', 'avant les virages'], ['TURBO', 'quand la jauge est pleine'], ['CHECKPOINTS', '+8 secondes'], ['FRÔLE LES VOITURES', 'bonus de points']];
+    const rules = [['UN POUCE DE CHAQUE CÔTÉ', 'à droite : glisse pour tourner'], ['FREIN', 'avant les virages'], ['TURBO', 'quand la jauge est pleine'], ['CHECKPOINTS', '+8 secondes'], ['FRÔLE LES VOITURES', 'bonus de points']];
     for (let i = 0; i < rules.length; i++) {
-      const a = clamp((t - (4.7 + i * .55)) * 4, 0, 1); if (a <= 0) continue;
+      const a = clamp((t - (4.7 + i * .2)) * 5, 0, 1); if (a <= 0) continue;
       const x0 = W * .52, y0 = H * .3 + i * H * .072, sl = (1 - easeOut(a)) * 40;
-      const curr = G.introHold && i === G.holdIdx; ctx.globalAlpha = a * (G.introHold && i < G.holdIdx ? .55 : 1); ctx.save(); ctx.translate(x0 + sl, y0); ctx.transform(1, 0, -.18, 1, 0, 0); ctx.fillStyle = INK; ctx.fillRect(-8, -22, W * .47, 44); ctx.fillStyle = Y; ctx.fillRect(-8, -22, curr ? W * .47 : 6, curr ? 3 : 44); if (curr) { ctx.fillRect(-8, 19, W * .47, 3); ctx.fillRect(-8, -22, 6, 44); } ctx.restore();
-      txt(rules[i][0], x0 + sl + 6, y0 - 7, 17, Y, 'left', 900, true); ctx.font = '600 11px Inter, sans-serif'; ctx.fillStyle = '#ddd'; ctx.textAlign = 'left'; ctx.fillText(rules[i][1], x0 + sl + 6, y0 + 11); ctx.globalAlpha = 1;
+      const curr = false; ctx.globalAlpha = a; ctx.save(); ctx.translate(x0 + sl, y0); ctx.transform(1, 0, -.18, 1, 0, 0); ctx.fillStyle = INK; ctx.fillRect(-8, -22, W * .47, 44); ctx.fillStyle = Y; ctx.fillRect(-8, -22, curr ? W * .47 : 6, curr ? 3 : 44); if (curr) { ctx.fillRect(-8, 19, W * .47, 3); ctx.fillRect(-8, -22, 6, 44); } ctx.restore();
+      txt(rules[i][0], x0 + sl + 6, y0 - 7, rules[i][0].length > 18 ? 14 : 17, Y, 'left', 900, true); ctx.font = '600 11px Inter, sans-serif'; ctx.fillStyle = '#ddd'; ctx.textAlign = 'left'; ctx.fillText(rules[i][1], x0 + sl + 6, y0 + 11); ctx.globalAlpha = 1;
     }
+    { const ta = clamp((t - 4.8) * 3, 0, 1) * clamp((8.2 - t) * 3, 0, 1); if (ta > 0) { const s2 = Math.min(1, W / 390) * .78, sw = Math.sin(G.t * 2.6);
+      ghostThumb(W * .13, H * .935, .42, s2, ta, true, ctx); ghostThumb(W * .84 + sw * W * .06, H * .935, -.42, s2, ta, false, ctx); } }
     chip('LE MEILLEUR SCORE DU MOIS GAGNE', H * .83, clamp((t - 7.5) * 4, 0, 1), true);
     if (G.introHold) {
-      const last = G.holdIdx === HOLDS.length - 1, lbl = last ? 'C’EST PARTI ›' : 'SUIVANT ›', pulse = 1 + Math.sin(G.t * 6) * .04, bw = W * .62, by = H * .86;
+      const lbl = 'SUIVANT ›', pulse = 1 + Math.sin(G.t * 6) * .04, bw = W * .56, by = H * .845;
       ctx.save(); ctx.translate(cx, by); ctx.scale(pulse, pulse); ctx.transform(1, 0, -.18, 1, 0, 0); ctx.fillStyle = Y; ctx.fillRect(-bw / 2, -26, bw, 52); ctx.restore();
       txt(lbl, cx, by + 1, 24, INK, 'center', 900, true);
-      txt((G.holdIdx + 1) + ' / ' + HOLDS.length, cx, by + 42, 13, 'rgba(255,255,255,.7)', 'center', 700);
     }
     if (t > 8.3) { ctx.fillStyle = `rgba(17,17,17,${(t - 8.3) / .3})`; ctx.fillRect(0, 0, W, H); }
   } else {
@@ -1007,22 +1011,6 @@ function brandBand(y, h) {
   ctx.font = `italic 900 ${h * .72}px "Saira Condensed", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = INK; ctx.fillText('SASIE CENTER', 0, 0); ctx.restore();
   ctx.fillStyle = INK; for (let i = 0; i < 2; i++) { const bx = W - 30 + i * 11, cy = y + h / 2 - 1, s2 = h * .28; ctx.beginPath(); ctx.moveTo(bx, cy - s2); ctx.lineTo(bx - s2 * .8, cy); ctx.lineTo(bx, cy + s2); ctx.lineTo(bx + 5, cy + s2); ctx.lineTo(bx - s2 * .8 + 5, cy); ctx.lineTo(bx + 5, cy - s2); ctx.fill(); }
 }
-/* aide à la prise en main : deux pouces en transparence, un de chaque côté,
-   pendant le compte à rebours et les premières secondes (3 premières parties) */
-function thumbsHint() {
-  if (!(G.hints < 3) || (G.state !== 'count' && G.state !== 'run')) return;
-  const el = G.t - G.hintT0, a = clamp(1 - (el - 7.2) / 1.2, 0, 1) * clamp(el / .4, 0, 1); if (a <= 0) return;
-  const y = H - 158, sway = Math.sin(G.t * 3.2) * 16, xl = W * .17, xr = W * .83;
-  ctx.save(); ctx.globalAlpha = .5 * a; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = '66px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
-  ctx.save(); ctx.translate(xl + sway, y); ctx.scale(-1, 1); ctx.fillText('👍', 0, 0); ctx.restore();
-  ctx.fillText('👍', xr + sway, y);
-  ctx.restore();
-  ctx.globalAlpha = a;
-  txt('‹  GLISSE POUR TOURNER  ›', W / 2, H - Math.max(66, H * .08) - Math.min(W, H * .62) / 540 * 360, 17, '#fff', 'center', 800, true, true);
-  txt('FREIN ↓', xl, y + 46, 13, '#fff', 'center', 800, false, true); txt('TURBO ↓', xr, y + 46, 13, '#fff', 'center', 800, false, true);
-  ctx.globalAlpha = 1;
-}
 function hud() {
   const bandH = 30; brandBand(0, bandH); const y0 = bandH;
   const pg = ctx.createLinearGradient(0, y0, 0, y0 + 62); pg.addColorStop(0, 'rgba(0,0,0,.62)'); pg.addColorStop(1, 'rgba(0,0,0,.25)'); ctx.fillStyle = pg; ctx.fillRect(0, y0, W, 62);
@@ -1041,7 +1029,6 @@ function hud() {
   $('turbo').classList.toggle('empty', G.turbo < 1);
   let my = H * .36;
   for (const m of G.msgs) { const a = 1 - Math.max(0, (m.t - .9) / .5); ctx.globalAlpha = Math.max(0, a); txt(m.text, W / 2, my - m.t * 30, m.big ? 40 : 28, m.col, 'center', 900, true, true); ctx.globalAlpha = 1; my += m.big ? 46 : 34; }
-  thumbsHint();
   if (G.state === 'count') { const n = Math.ceil(G.count), f = G.count % 1; txt('SASIE CENTER', W / 2, H * .3, 30, Y, 'center', 900, true, true); txt(n > 0 ? String(n) : 'GO', W / 2, H * .42, 110 + f * 40, '#fff', 'center', 900, true, true); }
 }
 
@@ -1141,12 +1128,44 @@ function renderChips() {
 $('gear').addEventListener('click', () => { renderChips(); $('pCustom').value = PRIZES.includes(CFG.prize) ? '' : CFG.prize; show('pitch'); });
 $('pSave').addEventListener('click', () => { const c = $('pCustom').value.trim(); if (c) CFG.prize = c; try { localStorage.setItem('sas_cfg', JSON.stringify({ prize: CFG.prize })); } catch (e) {} applyCfg(); show('start'); });
 
+/* ---------------- aide à la prise en main : faux pouces transparents ----------------
+   Pendant le compte à rebours et les premières secondes (3 premières parties) :
+   pouce gauche posé sur FREIN (onde de pression), pouce droit qui glisse pour tourner.
+   Dessinés sur un calque au-dessus des boutons, sans bloquer les touchers. */
+const hc = $('hint'), hx = hc.getContext('2d'), hctx = hx;
+function ghostThumb(x, y, ang, sc, a, press, c) {
+  const hx = c || hctx;
+  hx.save(); hx.translate(x, y); hx.rotate(ang); hx.scale(sc, sc);
+  hx.beginPath(); hx.moveTo(-31, 36); hx.bezierCurveTo(-35, -14, -24, -42, 0, -44); hx.bezierCurveTo(24, -42, 35, -14, 31, 36); hx.lineTo(36, 260); hx.lineTo(-36, 260); hx.closePath();
+  const g = hx.createLinearGradient(0, -44, 0, 200); g.addColorStop(0, `rgba(255,255,255,${.34 * a})`); g.addColorStop(1, `rgba(255,255,255,${.08 * a})`);
+  hx.fillStyle = g; hx.fill(); hx.strokeStyle = `rgba(255,255,255,${.75 * a})`; hx.lineWidth = 2.5 / sc; hx.stroke();
+  hx.beginPath(); rrX(hx, -17, -38, 34, 30, 12); hx.fillStyle = `rgba(255,255,255,${.12 * a})`; hx.fill(); hx.strokeStyle = `rgba(255,255,255,${.5 * a})`; hx.lineWidth = 1.8 / sc; hx.stroke();
+  hx.strokeStyle = `rgba(255,255,255,${.4 * a})`; hx.beginPath(); hx.moveTo(-24, 74); hx.quadraticCurveTo(0, 84, 24, 74); hx.moveTo(-22, 84); hx.quadraticCurveTo(0, 93, 22, 84); hx.stroke();
+  hx.restore();
+  if (press) { const ph = (G.t * 1.3) % 1; hx.strokeStyle = `rgba(255,255,255,${(1 - ph) * .7 * a})`; hx.lineWidth = 3; hx.beginPath(); hx.arc(x, y, 16 + ph * 30, 0, 7); hx.stroke(); }
+}
+function hintText(t, x, y, a) { hx.save(); hx.globalAlpha = a; hx.font = 'italic 800 17px "Saira Condensed", sans-serif'; hx.textAlign = 'center'; hx.textBaseline = 'middle'; hx.lineWidth = 4; hx.strokeStyle = 'rgba(0,0,0,.6)'; hx.lineJoin = 'round'; hx.strokeText(t, x, y); hx.fillStyle = '#fff'; hx.fillText(t, x, y); hx.restore(); }
+let hintOn = false;
+function thumbsHint() {
+  const el = G.t - (G.hintT0 || 0), act = G.hints < 3 && (G.state === 'count' || G.state === 'run');
+  const a = act ? clamp(1 - (el - 7.4) / 1.2, 0, 1) * clamp(el / .5, 0, 1) : 0;
+  if (a <= 0) { if (hintOn) { hx.setTransform(1, 0, 0, 1, 0, 0); hx.clearRect(0, 0, hc.width, hc.height); hintOn = false; } return; }
+  hintOn = true; hx.setTransform(1, 0, 0, 1, 0, 0); hx.clearRect(0, 0, hc.width, hc.height); hx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const cr = hc.getBoundingClientRect(), br = $('brake').getBoundingClientRect(), sc = Math.min(1.15, W / 390);
+  const bx = br.width ? br.left - cr.left + br.width / 2 : 59, by = br.height ? br.top - cr.top + br.height / 2 : H - 63;
+  ghostThumb(bx + 4, by + 4 + Math.sin(G.t * 8) * 1.5, .42, sc, a, true);
+  hintText('POUCE ICI', bx + 22, by - 84, a); hintText('POUR FREINER', bx + 22, by - 64, a);
+  const sw = Math.sin(G.t * 2.6), rx = W * .7 + sw * W * .14, ry = H - 205;
+  ghostThumb(rx, ry, -.42 + sw * .06, sc, a, false);
+  hx.save(); hx.globalAlpha = .6 * a; hx.strokeStyle = '#fff'; hx.lineWidth = 3; hx.setLineDash([6, 7]); hx.beginPath(); hx.moveTo(W * .5, ry - 2); hx.lineTo(W * .92, ry - 2); hx.stroke(); hx.restore();
+  hintText('‹  GLISSE  ›', W * .8, ry - 92, a); hintText('POUR TOURNER', W * .8, ry - 72, a);
+}
 /* ---------------- boucle ---------------- */
-function resize() { DPR = Math.min(window.devicePixelRatio || 1, 2); const r = cv.getBoundingClientRect(); W = Math.round(r.width); H = Math.round(r.height); cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR); }
+function resize() { DPR = Math.min(window.devicePixelRatio || 1, 2); const r = cv.getBoundingClientRect(); W = Math.round(r.width); H = Math.round(r.height); cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR); hc.width = cv.width; hc.height = cv.height; }
 window.addEventListener('resize', resize);
 document.addEventListener('visibilitychange', () => { if (document.hidden) AU.engine(IDLE, 0, false); });
 let last = 0;
-function frame(t) { requestAnimationFrame(frame); const dt = Math.min(.05, (t - last) / 1000 || 0); last = t; if (document.hidden) return; update(dt); render(); }
+function frame(t) { requestAnimationFrame(frame); const dt = Math.min(.05, (t - last) / 1000 || 0); last = t; if (document.hidden) return; update(dt); render(); thumbsHint(); }
 buildSprites(); buildTrack(); resetCars(); resize(); show('gate');
 const rebuild = () => buildSprites();
 if (document.fonts) document.fonts.ready.then(rebuild);
