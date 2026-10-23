@@ -47,10 +47,6 @@
   .model b { display: block; font: italic 900 26px/1 'Saira Condensed', sans-serif; text-transform: uppercase; margin: 4px 0 4px; }
   .model p { margin: 0; font: 500 12.5px/1.35 Inter, sans-serif; color: #333; padding-right: 30px; }
   .model::after { content: ''; position: absolute; right: -18px; top: 0; bottom: 0; width: 46px; background: repeating-linear-gradient(-45deg, var(--red) 0 8px, #111 8px 16px); transform: skewX(-18deg); }
-  .kit { display: flex; gap: 6px; justify-content: center; margin: 6px 0 2px; }
-  .kit span { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.08); }
-  .kit span.on { background: var(--red); }
-  .kit canvas { width: 26px; height: 26px; }
   form { width: 100%; max-width: 360px; text-align: left; }
   label { display: block; font: 700 12px/1 'Saira Condensed', sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--red); margin: 12px 0 5px; }
   input, select { width: 100%; padding: 12px; font: 600 16px Inter, sans-serif; color: #111; background: #fff; border: 0; border-radius: 3px; outline: none; }
@@ -114,7 +110,7 @@
   <div class="kicker">Le run du mois · Pontault-Combault</div>
   <div class="stripe"></div>
   <div class="prize"><small id="prizeMonth">À gagner ce mois-ci</small><b id="prizeTxt">Un bon d'achat de 150 € en équipement</b></div>
-  <div class="how"><div><b>Glisse ← →</b><br>frein avant les virages</div><div><b>Ramasse</b><br>ton équipement</div><div><b>Équipé</b><br>= protégé des chutes</div><div><b>Full équipé</b><br>score ×2</div></div>
+  <div class="how"><div><b>Glisse ← →</b><br>pour tourner</div><div><b>Frein</b><br>avant les virages</div><div><b>Turbo</b><br>jauge pleine</div><div><b>Checkpoints</b><br>+8 s</div></div>
   <button class="btn" id="play">Lancer le run</button>
   <button class="btn ghost" id="podBtn">Voir le podium du mois</button>
   <p class="sub" id="leader" style="min-height:18px"></p>
@@ -126,7 +122,7 @@
   <div class="kicker">Sasie Center · fin du run</div>
   <div class="score" id="eScore">0</div>
   <div class="best" id="eBest"></div>
-  <div class="stats"><div><b id="eKm">0</b>km/h max</div><div><b id="eKit">0/5</b>équipement</div><div><b id="eCrash">0</b>chutes</div><div><b id="eDist">0</b>km</div></div>
+  <div class="stats"><div><b id="eKm">0</b>km/h max</div><div><b id="eNear">0</b>frôlés</div><div><b id="eCrash">0</b>chutes</div><div><b id="eDist">0</b>km</div></div>
   <div class="model"><small>Ton équipement idéal</small><b id="mName">Pack</b><p id="mTxt">…</p></div>
   <button class="btn" id="enter">Je tente de gagner</button>
   <a class="btn ghost" id="shop" href="https://www.sasiecenter.com/" target="_blank" rel="noopener">Voir l'équipement</a>
@@ -185,11 +181,9 @@
 <script>
 'use strict';
 /* =====================================================================
-   SASIE CENTER — le run du mois (« Équipe-toi et roule »)
+   SASIE CENTER — le run du mois
    Jeu concours mobile (iPhone / Android, sans installation).
    Pseudo-3D canvas, son moteur synthétisé, intro de présentation du magasin.
-   On ramasse casque, gants, blouson, bottes et airbag : chaque pièce protège
-   d'une chute, l'équipement complet double le score.
    Visuel officiel : assets/logo.png (fourni par Sasie Center).
    ===================================================================== */
 const $ = id => document.getElementById(id);
@@ -412,8 +406,7 @@ function buildTrack() {
     if (n % 9 === 4 && rs() < .45) S.push({ k: 'build' + (1 + (rs() * 3 | 0)), x: (rs() < .5 ? -1 : 1) * (4.6 + rs() * 2) });
     if (n % 40 === 20) for (let q = 0; q < 4; q++) if (segs[n + q * 3]) segs[n + q * 3].sprites.push({ k: 'coin', x: [-.66, 0, .66][(n / 40 | 0) % 3], pick: true });
     if (n % 230 === 120) S.push({ k: 'bolt', x: [-.66, .66, 0][(n / 230 | 0) % 3], pick: true });
-    /* une pièce d'équipement tous les 85 segments, les 5 types se suivent dans l'ordre */
-    if (n % 85 === 45 && n % 1000 !== 700) { const i = (n / 85 | 0); S.push({ k: 'g_' + KIT[i % 5], gear: KIT[i % 5], x: [0, -.66, .66, 0, .66, -.66][i % 6], pick: true }); }
+
     if (n % 1000 === 700) { S.push({ k: 'gate', x: 0, gate: true, center: true }); S.push({ k: 'stand', x: -2.6 }); S.push({ k: 'stand', x: 2.6, flip: true }); }
   }
 }
@@ -484,7 +477,7 @@ function rider(x, cx, cy, s, kit, o) {
   if (has('blouson')) { x.strokeStyle = Y; x.lineWidth = 3; x.beginPath(); x.moveTo(-22, -126); x.lineTo(-24, -64); x.moveTo(22, -126); x.lineTo(24, -64); x.stroke(); x.strokeStyle = '#555'; x.lineWidth = 1.5; x.beginPath(); x.moveTo(0, -130); x.lineTo(0, -62); x.stroke(); }
   if (has('airbag')) {
     x.fillStyle = Y; x.beginPath(); x.moveTo(-27, -128); x.lineTo(-8, -128); x.lineTo(0, -108); x.lineTo(8, -128); x.lineTo(27, -128); x.lineTo(30, -70); x.lineTo(-30, -70); x.closePath(); x.fill();
-    x.strokeStyle = INK; x.lineWidth = 2; x.stroke(); x.fillStyle = INK; x.font = '900 13px "Saira Condensed", sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('AIRBAG', 0, -84);
+    x.strokeStyle = INK; x.lineWidth = 3.5; x.stroke(); x.fillStyle = INK; x.font = '900 13px "Saira Condensed", sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('AIRBAG', 0, -84);
     x.strokeStyle = Y; x.lineWidth = 8; x.beginPath(); x.ellipse(0, -132, 20, 7, 0, 0, Math.PI, true); x.stroke();
   }
   arm(1, pose === 'stand' || o.walk ? -aR : aR, pose === 'flag');
@@ -492,8 +485,14 @@ function rider(x, cx, cy, s, kit, o) {
   x.fillStyle = skin; rrX(x, -7, -142, 14, 14, 4); x.fill();
   const hy = -170;
   if (has('casque')) {
-    x.save(); x.translate(0, hy); x.scale(.82, .82); gearIcon(x, 'casque', Y, INK); x.restore();
-    x.fillStyle = INK; x.font = 'italic 900 12px "Saira Condensed", sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('SC', -14, hy - 18);
+    /* casque noir, bande et « SC » jaunes, liseré blanc : lisible sur fond jaune comme sur fond sombre */
+    x.save(); x.translate(0, hy); x.scale(.86, .86);
+    x.save(); x.scale(1.1, 1.1); gearIcon(x, 'casque', '#ffffff', '#ffffff'); x.restore();
+    gearIcon(x, 'casque', '#141414', '#5d6a76');
+    x.strokeStyle = Y; x.lineWidth = 8; x.lineCap = 'round'; x.beginPath(); x.moveTo(-34, -6); x.quadraticCurveTo(-24, -38, 6, -40); x.stroke();
+    x.strokeStyle = 'rgba(255,255,255,.75)'; x.lineWidth = 3; x.beginPath(); x.moveTo(6, -8); x.quadraticCurveTo(24, -12, 36, -4); x.stroke();
+    x.fillStyle = Y; x.font = 'italic 900 15px "Saira Condensed", sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('SC', -18, 4);
+    x.restore();
   } else {
     x.fillStyle = skin; x.beginPath(); x.ellipse(0, hy, 25, 29, 0, 0, 7); x.fill();
     x.beginPath(); x.ellipse(-25, hy + 2, 5, 7, 0, 0, 7); x.ellipse(25, hy + 2, 5, 7, 0, 0, 7); x.fill();
@@ -579,11 +578,6 @@ function buildSprites() {
     for (let yy = 54; yy < h - 54; yy += 42) for (let xx = 18; xx < w - 20; xx += 40) { x.fillStyle = '#dfe7ee'; x.fillRect(xx, yy, 22, 28); x.fillStyle = 'rgba(80,100,120,.5)'; x.fillRect(xx, yy, 22, 10); x.fillStyle = '#2d2d30'; x.fillRect(xx - 2, yy + 28, 26, 3); }
     x.fillStyle = '#6e4a32'; x.fillRect(w / 2 - 16, h - 48, 32, 48);
   }) };
-  for (const k of KIT) SPR['g_' + k] = { ww: 380, img: mk(110, 110, x => {
-    const g = x.createRadialGradient(55, 55, 20, 55, 55, 55); g.addColorStop(0, 'rgba(246,235,22,.55)'); g.addColorStop(1, 'rgba(246,235,22,0)'); x.fillStyle = g; x.fillRect(0, 0, 110, 110);
-    x.fillStyle = Y; x.beginPath(); x.arc(55, 55, 40, 0, 7); x.fill(); x.strokeStyle = INK; x.lineWidth = 5; x.stroke();
-    x.save(); x.translate(55, 57); x.scale(.55, .55); gearIcon(x, k, INK, Y); x.restore();
-  }) };
   SPR.coin = { ww: 240, img: mk(70, 70, (x) => { const g = x.createRadialGradient(26, 24, 4, 35, 35, 32); g.addColorStop(0, '#fff6c0'); g.addColorStop(1, '#e8a400'); x.fillStyle = g; x.beginPath(); x.arc(35, 35, 30, 0, 7); x.fill(); x.strokeStyle = '#a86e00'; x.lineWidth = 4; x.stroke(); x.fillStyle = '#a86e00'; x.font = '900 36px "Saira Condensed", sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('★', 35, 37); }) };
   SPR.bolt = { ww: 320, img: mk(76, 96, (x) => { blob(x, 38, 48, 34, '#ff6a6a', '#b80000'); x.fillStyle = '#fff'; x.beginPath(); x.moveTo(44, 14); x.lineTo(20, 52); x.lineTo(36, 52); x.lineTo(30, 84); x.lineTo(56, 40); x.lineTo(40, 40); x.closePath(); x.fill(); }) };
   const car = (body, roof) => mk(230, 160, (x, w, h) => {
@@ -604,7 +598,7 @@ function buildSprites() {
 /* =====================================================================
    ÉTAT, ENTRÉES
    ===================================================================== */
-const G = { state: 'gate', pos: 0, x: 0, speed: 0, time: 45, score: 0, dist: 0, near: 0, crashes: 0, maxKmh: 0, turboUses: 0, turbo: .35, boost: 0, coins: 0, shake: 0, flash: 0, msgs: [], lean: 0, steer: 0, cars: [], skyX: 0, hillX: 0, t: 0, count: 0, endT: 0, lastGate: -1, gear: 0, rpm: IDLE, thr: 0, popT: 0, parts: [], brake: false, introT: 0, kit: [], full: false, saves: 0 };
+const G = { state: 'gate', pos: 0, x: 0, speed: 0, time: 45, score: 0, dist: 0, near: 0, crashes: 0, maxKmh: 0, turboUses: 0, turbo: .35, boost: 0, coins: 0, shake: 0, flash: 0, msgs: [], lean: 0, steer: 0, cars: [], skyX: 0, hillX: 0, t: 0, count: 0, endT: 0, lastGate: -1, gear: 0, rpm: IDLE, thr: 0, popT: 0, parts: [], brake: false, introT: 0 };
 function resetCars() {
   G.cars = []; const r = rnd(Date.now() | 0);
   for (let n = 0; n < 48; n++) {
@@ -615,7 +609,7 @@ function resetCars() {
 }
 function startRun() {
   buildTrack(); resetCars();
-  Object.assign(G, { state: 'count', pos: 0, x: 0, speed: 0, time: 45, score: 0, dist: 0, near: 0, crashes: 0, maxKmh: 0, turboUses: 0, turbo: .35, boost: 0, coins: 0, shake: 0, flash: 0, msgs: [], lean: 0, steer: 0, count: 3.2, endT: 0, lastGate: -1, gear: 0, rpm: IDLE, parts: [], kit: [], full: false, kitMax: 0, saves: 0 });
+  Object.assign(G, { state: 'count', pos: 0, x: 0, speed: 0, time: 45, score: 0, dist: 0, near: 0, crashes: 0, maxKmh: 0, turboUses: 0, turbo: .35, boost: 0, coins: 0, shake: 0, flash: 0, msgs: [], lean: 0, steer: 0, count: 3.2, endT: 0, lastGate: -1, gear: 0, rpm: IDLE, parts: [] });
   show(null); $('turbo').classList.add('on'); $('brake').classList.add('on'); AU.init(); AU.beep(false);
 }
 function msg(text, col, big) { G.msgs.push({ text, col: col || '#fff', t: 0, big }); if (G.msgs.length > 4) G.msgs.shift(); }
@@ -659,7 +653,7 @@ function updateIntro(dt) {
   G.rpm += (target - G.rpm) * Math.min(1, dt * 12);
   G.popT -= dt; if (((t > 1.1 && t < 1.7) || (t > 9.1 && t < 9.6)) && G.popT <= 0) { G.popT = .08 + Math.random() * .1; AU.pop(); }
   AU.engine(G.rpm, target > 5000 ? 1 : 0, true);
-  for (let i = 0; i < 5; i++) { const land = 3.6 + i * .8 + .5; if (prev < land && t >= land) AU.coin(); }
+  for (let i = 0; i < 5; i++) { const at = 4.7 + i * .55; if (prev < at && t >= at) AU.blip(); }
   if (prev < 7.5 && t >= 7.5) AU.check();
   if (t > INTRO_LEN) skipIntro();
 }
@@ -689,32 +683,25 @@ function drawIntro() {
     chip('AU BONHEUR DU MOTARD DEPUIS 1990', H * .905, clamp((t - 2.3) * 4, 0, 1));
     if (t > 3.1) { ctx.fillStyle = `rgba(17,17,17,${(t - 3.1) / .3})`; ctx.fillRect(0, 0, W, H); }
   } else if (t < 8.6) {
-    /* scène 2 : équipe-toi */
+    /* scène 2 : les règles du run, présentées par le pilote Sasie */
     const u = t - 3.4;
     ctx.fillStyle = '#1b1d20'; ctx.fillRect(0, 0, W, H);
     ctx.save(); ctx.globalAlpha = .12; ctx.fillStyle = Y; for (let k = -H; k < W + H; k += 46) { ctx.beginPath(); ctx.moveTo(k, 0); ctx.lineTo(k + 22, 0); ctx.lineTo(k + 22 - H * .6, H); ctx.lineTo(k - H * .6, H); ctx.fill(); } ctx.restore();
     const sg = ctx.createRadialGradient(cx, H * .5, 0, cx, H * .5, H * .45); sg.addColorStop(0, 'rgba(246,235,22,.22)'); sg.addColorStop(1, 'rgba(246,235,22,0)'); ctx.fillStyle = sg; ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = '#2c2f33'; ctx.fillRect(0, H * .72, W, H * .28);
-    const hp = easeBack(u / .5); ctx.save(); ctx.translate(cx, H * .14); ctx.scale(hp, hp); txt('ÉQUIPE-TOI', 0, 0, 52, Y, 'center', 900, true, true); txt('ET ROULE !', 0, 46, 40, '#fff', 'center', 900, true, true); ctx.restore();
-    const kit = [], fy = H * .72, sc = Math.min(1.3, H / 600);
-    let cur = null;
-    for (let i = 0; i < 5; i++) {
-      const t0 = 3.6 + i * .8, land = t0 + .5, k = KIT[i];
-      if (t >= land) kit.push(k);
-      else if (t >= t0) cur = { k, p: (t - t0) / .5, side: i % 2 ? 1 : -1 };
+    const hp = easeBack(u / .5); ctx.save(); ctx.translate(cx, H * .12); ctx.scale(hp, hp); txt('45 SECONDES', 0, 0, 50, Y, 'center', 900, true, true); txt('POUR TOUT DONNER', 0, 44, 34, '#fff', 'center', 900, true, true); ctx.restore();
+    const sc = Math.min(1.3, H / 600), fy = H * .72;
+    const mx = lerp(-W * .4, cx - W * .18, easeOut((t - 3.5) / .9));
+    rider(ctx, mx, fy, sc, KIT, { t, walk: t < 4.4, pose: t > 7.4 ? 'thumb' : t > 4.6 ? 'wave' : 'stand', name: t > 4.4 ? 'PILOTE SASIE' : null });
+    bubble(mx - 18, fy - 235 * sc, 'Je t’explique !', clamp((t - 4.5) * 4, 0, 1) * clamp((5.9 - t) * 4, 0, 1), 1);
+    const rules = [['GLISSE ← →', 'pour tourner'], ['FREIN', 'avant les virages'], ['TURBO', 'quand la jauge est pleine'], ['CHECKPOINTS', '+8 secondes'], ['FRÔLE LES VOITURES', 'bonus de points']];
+    for (let i = 0; i < rules.length; i++) {
+      const a = clamp((t - (4.7 + i * .55)) * 4, 0, 1); if (a <= 0) continue;
+      const x0 = W * .52, y0 = H * .3 + i * H * .072, sl = (1 - easeOut(a)) * 40;
+      ctx.globalAlpha = a; ctx.save(); ctx.translate(x0 + sl, y0); ctx.transform(1, 0, -.18, 1, 0, 0); ctx.fillStyle = INK; ctx.fillRect(-8, -22, W * .47, 44); ctx.fillStyle = Y; ctx.fillRect(-8, -22, 6, 44); ctx.restore();
+      txt(rules[i][0], x0 + sl + 6, y0 - 7, 17, Y, 'left', 900, true); ctx.font = '600 11px Inter, sans-serif'; ctx.fillStyle = '#ddd'; ctx.textAlign = 'left'; ctx.fillText(rules[i][1], x0 + sl + 6, y0 + 11); ctx.globalAlpha = 1;
     }
-    rider(ctx, cx, fy, sc, kit, { t, pose: t > 7.6 ? 'thumb' : 'stand' });
-    if (cur) {
-      const p = easeOut(cur.p), tx = cx, ty = fy - 150 * sc, sx = cx + cur.side * W * .62, sy = H * .3;
-      const x0 = lerp(sx, tx, p), y0 = lerp(sy, ty, p) - Math.sin(p * Math.PI) * 60, r = 40 * (1.2 - p * .5);
-      ctx.fillStyle = Y; ctx.beginPath(); ctx.arc(x0, y0, r, 0, 7); ctx.fill(); ctx.save(); ctx.translate(x0, y0 + 2); ctx.scale(r / 70, r / 70); gearIcon(ctx, cur.k, INK, Y); ctx.restore();
-    }
-    const last = kit.length ? KIT[kit.length - 1] : null, lt = last ? t - (3.6 + (kit.length - 1) * .8 + .5) : 9;
-    if (last && lt < .7) { txt(KIT_LBL[last] + ' ÉQUIPÉ !', cx, H * .3, 34 + (1 - Math.min(1, lt * 3)) * 10, Y, 'center', 900, true, true); for (let k = 0; k < 6; k++) { const a = k / 6 * 6.28 + lt * 3, rr = 60 + lt * 120; ctx.fillStyle = `rgba(246,235,22,${1 - lt / .7})`; ctx.beginPath(); ctx.arc(cx + Math.cos(a) * rr, fy - 150 * sc + Math.sin(a) * rr * .6, 4, 0, 7); ctx.fill(); } }
-    /* rangée des 5 pièces */
-    for (let i = 0; i < 5; i++) { const on = kit.includes(KIT[i]), x0 = cx + (i - 2) * 46, y0 = H * .8; ctx.fillStyle = on ? Y : 'rgba(255,255,255,.1)'; ctx.beginPath(); ctx.arc(x0, y0, 19, 0, 7); ctx.fill(); ctx.save(); ctx.translate(x0, y0 + 1); ctx.scale(.27, .27); gearIcon(ctx, KIT[i], on ? INK : 'rgba(255,255,255,.4)', on ? Y : '#1b1d20'); ctx.restore(); }
-    chip('1 PIÈCE = 1 CHUTE ÉVITÉE', H * .865, clamp((t - 4.3) * 4, 0, 1));
-    chip('FULL ÉQUIPÉ = SCORE ×2', H * .925, clamp((t - 7.5) * 4, 0, 1), true);
+    chip('LE MEILLEUR SCORE DU MOIS GAGNE', H * .83, clamp((t - 7.5) * 4, 0, 1), true);
     if (t > 8.3) { ctx.fillStyle = `rgba(17,17,17,${(t - 8.3) / .3})`; ctx.fillRect(0, 0, W, H); }
   } else {
     /* scène 3 : le lot du mois */
@@ -731,7 +718,8 @@ function drawIntro() {
       lines.slice(0, 3).forEach((l, i) => txt(l, cx, by + 56 + i * 26, 25, '#fff', 'center', 900, true));
       ctx.globalAlpha = 1;
     }
-    rider(ctx, cx, H * .9, Math.min(1.2, H / 640), KIT, { t, pose: 'flag', name: 'PILOTE SASIE' });
+    { const rs = Math.min(1.2, H / 640), ry = H * .9; ctx.fillStyle = 'rgba(17,17,17,.9)'; ctx.beginPath(); ctx.ellipse(cx, ry - 118 * rs, 118 * rs, 128 * rs, 0, 0, 7); ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.stroke();
+      rider(ctx, cx, ry, rs, KIT, { t, pose: 'flag', name: 'PILOTE SASIE' }); }
     bubble(cx + 70, H * .9 - 240 * Math.min(1.2, H / 640), 'Prêt pour le run ?', clamp((u - .8) * 4, 0, 1), -1);
   }
   brandBand(0, 30);
@@ -785,7 +773,7 @@ function update(dt) {
   G.thr = thr; updateGearbox(dt, thr);
   G.pos = inc(G.pos, dt * G.speed, trackLen);
   const moved = dt * G.speed; G.dist += moved;
-  G.score += moved / 40 * (G.boost > 0 ? 1.5 : 1) * (G.full ? 2 : 1);
+  G.score += moved / 40 * (G.boost > 0 ? 1.5 : 1);
   G.turbo = Math.min(1, G.turbo + dt * .045);
   G.time -= dt;
   G.maxKmh = Math.max(G.maxKmh, Math.round(G.speed * KMH));
@@ -795,34 +783,20 @@ function update(dt) {
     if (o.gate && G.lastGate !== s.i) { G.lastGate = s.i; G.time += 8; G.score += 250; AU.check(); msg('CHECKPOINT +8 S', Y, true); }
     if (!o.pick || o.taken) continue;
     if (Math.abs(o.x - G.x) < .3) { o.taken = true;
-      if (o.k === 'coin') { G.score += 100 * (G.full ? 2 : 1); G.coins++; AU.coin(); msg('+100', Y); }
-      else if (o.gear) pickGear(o.gear);
+      if (o.k === 'coin') { G.score += 100; G.coins++; AU.coin(); msg('+100', Y); }
       else { G.turbo = 1; AU.tone(880, .2, 'triangle', .1, 0, 2); msg('TURBO PLEIN', Y); } }
   }
   const pz = G.pos + playerZ;
   for (const c of G.cars) {
     const rel = ((c.z - pz) % trackLen + trackLen) % trackLen, ahead = rel < trackLen / 2;
     if (ahead && rel < SEG * .8 && G.speed > c.speed && Math.abs(c.x - G.x) < .26) {
-      G.crashes++; G.shake = 1; c.z = inc(c.z, SEG * 3, trackLen); AU.crash(); if (navigator.vibrate) navigator.vibrate([60, 40, 60]);
-      if (G.kit.length) {
-        /* l'équipement encaisse la chute : on perd une pièce (l'airbag d'abord), pas de temps */
-        const lost = G.kit.includes('airbag') ? 'airbag' : G.kit[G.kit.length - 1]; G.kit = G.kit.filter(k => k !== lost); G.saves++;
-        if (G.full) { G.full = false; msg('SCORE ×2 PERDU', '#ffffff'); }
-        G.speed = c.speed * .8; G.flash = .4; spark(W / 2, H * .85, Y, 22, 220);
-        msg(lost === 'airbag' ? 'L’AIRBAG T’A SAUVÉ !' : KIT_LBL[lost] + ' T’A PROTÉGÉ !', Y, true);
-      } else { G.speed = c.speed * .5; G.flash = 1; G.time -= 3; G.gear = Math.min(G.gear, 1); spark(W / 2, H * .85, '#ff6a3a', 18, 200); msg('CHUTE SANS ÉQUIPEMENT −3 S', '#ff4a4a', true); }
+      G.speed = c.speed * .55; G.crashes++; G.shake = 1; G.flash = 1; c.z = inc(c.z, SEG * 3, trackLen); AU.crash(); msg('CHUTE ! −2 S', '#ff4a4a', true); G.time -= 2; spark(W / 2, H * .85, Y, 18, 200); if (navigator.vibrate) navigator.vibrate([60, 40, 60]); G.gear = Math.min(G.gear, 1);
     }
     if (!ahead && rel > trackLen - SEG * 2 && !c.nearDone) { c.nearDone = true; const d = Math.abs(c.x - G.x); if (d < .5 && d >= .26 && G.speed > MAXV * .5) { G.near++; G.score += 50 + G.near * 5; AU.near(); msg('FRÔLÉ ! +' + (50 + G.near * 5), '#7fd3ff'); } }
     if (ahead && rel > SEG * 4) c.nearDone = false;
   }
   updateCars(dt);
   if (G.time <= 0) { G.time = 0; G.state = 'end'; G.endT = 0; $('turbo').classList.remove('on'); $('brake').classList.remove('on'); G.brake = false; AU.beep(true); msg('TERMINÉ', '#fff', true); }
-}
-function pickGear(k) {
-  if (G.kit.includes(k)) { G.score += 80 * (G.full ? 2 : 1); AU.coin(); msg('+80', Y); return; }
-  G.kit.push(k); G.kitMax = Math.max(G.kitMax, G.kit.length); G.score += 150 * (G.full ? 2 : 1); AU.coin(); AU.check();
-  msg(KIT_LBL[k] + ' ÉQUIPÉ ! +150', Y, true);
-  if (G.kit.length === 5 && !G.full) { G.full = true; AU.turbo(); msg('FULL ÉQUIPÉ ! SCORE ×2', Y, true); if (navigator.vibrate) navigator.vibrate(80); }
 }
 function updateCars(dt) {
   for (const s of segs) s.cars.length = 0;
@@ -935,7 +909,7 @@ function render() {
     for (const o of s.sprites) {
       if (o.pick && o.taken) continue;
       const sc = s.p1.s.scale, X = s.p1.s.x + sc * o.x * RW * W / 2, Y = s.p1.s.y;
-      if (o.k === 'coin' || o.gear) { drawSprite(SPR[o.k], sc, X, Y - sc * (o.gear ? 120 : 150) * W / 2 - Math.abs(Math.sin(G.t * 4 + s.i)) * sc * 60 * W / 2, -.5, s.clip); continue; }
+      if (o.k === 'coin') { drawSprite(SPR.coin, sc, X, Y - sc * 150 * W / 2 - Math.abs(Math.sin(G.t * 4 + s.i)) * sc * 60 * W / 2, -.5, s.clip); continue; }
       const spr = o.anim && flagFrame ? SPR.masc2 : SPR[o.k];
       if (o.center) { const near = clamp((n - 4) / 7, 0, 1); if (near <= 0) continue; ctx.globalAlpha = fade * near; }
       drawSprite(spr, sc, X, Y, o.center ? -.5 : o.x < 0 ? -1 : 0, s.clip, o.flip);
@@ -1016,16 +990,6 @@ function brandBand(y, h) {
   ctx.font = `italic 900 ${h * .72}px "Saira Condensed", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = INK; ctx.fillText('SASIE CENTER', 0, 0); ctx.restore();
   ctx.fillStyle = INK; for (let i = 0; i < 2; i++) { const bx = W - 30 + i * 11, cy = y + h / 2 - 1, s2 = h * .28; ctx.beginPath(); ctx.moveTo(bx, cy - s2); ctx.lineTo(bx - s2 * .8, cy); ctx.lineTo(bx, cy + s2); ctx.lineTo(bx + 5, cy + s2); ctx.lineTo(bx - s2 * .8 + 5, cy); ctx.lineTo(bx + 5, cy - s2); ctx.fill(); }
 }
-function kitSlots(cx, cy, r) {
-  const n = KIT.length, gap = r * 2.5;
-  for (let i = 0; i < n; i++) {
-    const k = KIT[i], on = G.kit.includes(k), x0 = cx + (i - (n - 1) / 2) * gap;
-    ctx.fillStyle = on ? Y : 'rgba(0,0,0,.55)'; ctx.beginPath(); ctx.arc(x0, cy, r, 0, 7); ctx.fill();
-    ctx.strokeStyle = on ? INK : 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.5; ctx.stroke();
-    ctx.save(); ctx.translate(x0, cy + 1); ctx.scale(r / 62, r / 62); gearIcon(ctx, k, on ? INK : 'rgba(255,255,255,.45)', on ? Y : 'rgba(0,0,0,.6)'); ctx.restore();
-  }
-  if (G.full) txt('×2', cx + (n / 2) * gap + 8, cy + 1, r * 1.3, Y, 'left', 900, true, true);
-}
 function hud() {
   const bandH = 30; brandBand(0, bandH); const y0 = bandH;
   const pg = ctx.createLinearGradient(0, y0, 0, y0 + 62); pg.addColorStop(0, 'rgba(0,0,0,.62)'); pg.addColorStop(1, 'rgba(0,0,0,.25)'); ctx.fillStyle = pg; ctx.fillRect(0, y0, W, 62);
@@ -1040,10 +1004,9 @@ function hud() {
   ctx.fillStyle = rg; rrect(bx, byy, Math.max(8, bw * rp), 8, 4); ctx.fill();
   ctx.fillStyle = 'rgba(0,0,0,.5)'; rrect(bx, byy + 13, bw, 8, 4); ctx.fill();
   ctx.fillStyle = G.turbo >= 1 ? (Math.floor(G.t * 6) % 2 ? Y : '#ffffff') : '#c9bd00'; rrect(bx, byy + 13, Math.max(8, bw * G.turbo), 8, 4); ctx.fill();
-  txt(G.turbo >= 1 ? 'TURBO PRÊT' : 'TOURS · TURBO', W / 2, byy + 31, 10, '#fff', 'center', 800, false, true);
-  kitSlots(W / 2, byy + 56, 14);
+  txt(G.turbo >= 1 ? 'TURBO PRÊT' : 'TOURS · TURBO', W / 2, byy + 33, 11, '#fff', 'center', 800, false, true);
   $('turbo').classList.toggle('empty', G.turbo < 1);
-  let my = H * .38;
+  let my = H * .36;
   for (const m of G.msgs) { const a = 1 - Math.max(0, (m.t - .9) / .5); ctx.globalAlpha = Math.max(0, a); txt(m.text, W / 2, my - m.t * 30, m.big ? 40 : 28, m.col, 'center', 900, true, true); ctx.globalAlpha = 1; my += m.big ? 46 : 34; }
   if (G.state === 'count') { const n = Math.ceil(G.count), f = G.count % 1; txt('SASIE CENTER', W / 2, H * .3, 30, Y, 'center', 900, true, true); txt(n > 0 ? String(n) : 'GO', W / 2, H * .42, 110 + f * 40, '#fff', 'center', 900, true, true); }
 }
@@ -1057,17 +1020,17 @@ function show(id) {
 const MODELS = [
   { n: 'Pack Airbag', t: 'Quelques chutes au compteur : le gilet airbag est la meilleure assurance pour rouler serein. Viens l’essayer en magasin.', u: 'https://www.sasiecenter.com/47-airbag', ok: s => s.crashes >= 3 },
   { n: 'Pack Racing', t: 'Turbo, vitesse de pointe, trajectoires tendues : casque intégral et cuir, l’équipement des pistards.', u: 'https://www.sasiecenter.com/28-casque-integral', ok: s => s.turboUses >= 2 && s.maxKmh >= 330 },
-  { n: 'Pack Full Équipé', t: 'Tu as tout ramassé : casque, gants, blouson, bottes et airbag. Le motard modèle, de la tête aux pieds.', u: 'https://www.sasiecenter.com/42-casque', ok: s => s.kitMax >= 5 },
+  { n: 'Pack Street', t: 'Tu frôles tout, tu ne lâches rien : un casque jet ou intégral léger et un blouson cuir pour le style urbain.', u: 'https://www.sasiecenter.com/6-blouson-cuir', ok: s => s.near >= 6 },
   { n: 'Pack Roadtrip', t: 'Régulier, propre, sans chute : un casque modulable et un blouson textile pour avaler les kilomètres.', u: 'https://www.sasiecenter.com/29-casque-modulable', ok: s => s.crashes <= 1 && s.dist >= 3.5 },
-  { n: 'Pack Street', t: 'Agile en ville, tu te faufiles partout : un bon blouson et des gants pour rouler tous les jours.', u: 'https://www.sasiecenter.com/5-blousons-vestes', ok: () => true },
+  { n: 'Pack Essentiel', t: 'Polyvalent et efficace : un bon casque, des gants et un blouson, la base pour rouler tous les jours.', u: 'https://www.sasiecenter.com/42-casque', ok: () => true },
 ];
 function showEnd() {
   const sc = Math.floor(G.score), km = G.dist * (262 / 3.6) / MAXV / 1000;
-  const m = MODELS.find(x => x.ok({ near: G.near, turboUses: G.turboUses, maxKmh: G.maxKmh, crashes: G.crashes, dist: km, kitMax: G.kitMax }));
+  const m = MODELS.find(x => x.ok({ near: G.near, turboUses: G.turboUses, maxKmh: G.maxKmh, crashes: G.crashes, dist: km }));
   const rec = sc > best; if (rec) { best = sc; store.set('best', best); }
   G.last = { score: sc, model: m.n };
   $('eScore').textContent = sc.toLocaleString('fr-FR'); $('eBest').textContent = rec ? 'Nouveau record personnel !' : 'Record : ' + best.toLocaleString('fr-FR') + ' pts';
-  $('eKm').textContent = G.maxKmh; $('eKit').textContent = G.kitMax + '/5'; $('eCrash').textContent = G.crashes; $('eDist').textContent = km.toFixed(1).replace('.', ',');
+  $('eKm').textContent = G.maxKmh; $('eNear').textContent = G.near; $('eCrash').textContent = G.crashes; $('eDist').textContent = km.toFixed(1).replace('.', ',');
   $('mName').textContent = m.n; $('mTxt').textContent = m.t; $('shop').href = m.u; $('shop').textContent = 'Voir le ' + m.n + ' sur sasiecenter.com';
   show('end'); AU.engine(IDLE, 0, false); showBest();
 }
