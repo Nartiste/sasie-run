@@ -715,8 +715,6 @@ function drawIntro() {
       const curr = false; ctx.globalAlpha = a; ctx.save(); ctx.translate(x0 + sl, y0); ctx.transform(1, 0, -.18, 1, 0, 0); ctx.fillStyle = INK; ctx.fillRect(-8, -22, W * .47, 44); ctx.fillStyle = Y; ctx.fillRect(-8, -22, curr ? W * .47 : 6, curr ? 3 : 44); if (curr) { ctx.fillRect(-8, 19, W * .47, 3); ctx.fillRect(-8, -22, 6, 44); } ctx.restore();
       txt(rules[i][0], x0 + sl + 6, y0 - 7, rules[i][0].length > 18 ? 14 : 17, Y, 'left', 900, true); ctx.font = '600 11px Inter, sans-serif'; ctx.fillStyle = '#ddd'; ctx.textAlign = 'left'; ctx.fillText(rules[i][1], x0 + sl + 6, y0 + 11); ctx.globalAlpha = 1;
     }
-    { const ta = clamp((t - 4.8) * 3, 0, 1) * clamp((8.2 - t) * 3, 0, 1); if (ta > 0) { const s2 = Math.min(1, W / 390) * .78, sw = Math.sin(G.t * 2.6);
-      ghostThumb(W * .13, H * .935, .42, s2, ta, true, ctx); ghostThumb(W * .84 + sw * W * .06, H * .935, -.42, s2, ta, false, ctx); } }
     chip('LE MEILLEUR SCORE DU MOIS GAGNE', H * .83, clamp((t - 7.5) * 4, 0, 1), true);
     if (G.introHold) {
       const lbl = 'SUIVANT ›', pulse = 1 + Math.sin(G.t * 6) * .04, bw = W * .56, by = H * .845;
@@ -1129,7 +1127,7 @@ $('gear').addEventListener('click', () => { renderChips(); $('pCustom').value = 
 $('pSave').addEventListener('click', () => { const c = $('pCustom').value.trim(); if (c) CFG.prize = c; try { localStorage.setItem('sas_cfg', JSON.stringify({ prize: CFG.prize })); } catch (e) {} applyCfg(); show('start'); });
 
 /* ---------------- aide à la prise en main : faux pouces transparents ----------------
-   Pendant le compte à rebours et les premières secondes (3 premières parties) :
+   Uniquement au démarrage de la partie (compte à rebours), puis fondu au « GO ! » :
    pouce gauche posé sur FREIN (onde de pression), pouce droit qui glisse pour tourner.
    Dessinés sur un calque au-dessus des boutons, sans bloquer les touchers. */
 const hc = $('hint'), hx = hc.getContext('2d'), hctx = hx;
@@ -1147,8 +1145,9 @@ function ghostThumb(x, y, ang, sc, a, press, c) {
 function hintText(t, x, y, a) { hx.save(); hx.globalAlpha = a; hx.font = 'italic 800 17px "Saira Condensed", sans-serif'; hx.textAlign = 'center'; hx.textBaseline = 'middle'; hx.lineWidth = 4; hx.strokeStyle = 'rgba(0,0,0,.6)'; hx.lineJoin = 'round'; hx.strokeText(t, x, y); hx.fillStyle = '#fff'; hx.fillText(t, x, y); hx.restore(); }
 let hintOn = false;
 function thumbsHint() {
-  const el = G.t - (G.hintT0 || 0), act = G.hints < 3 && (G.state === 'count' || G.state === 'run');
-  const a = act ? clamp(1 - (el - 7.4) / 1.2, 0, 1) * clamp(el / .5, 0, 1) : 0;
+  /* visibles uniquement pendant le compte à rebours ; fondu au « GO ! » */
+  const el = G.t - (G.hintT0 || 0), act = G.state === 'count' || G.state === 'run';
+  const a = act ? clamp(1 - (el - 3.2) / .4, 0, 1) * clamp(el / .4, 0, 1) : 0;
   if (a <= 0) { if (hintOn) { hx.setTransform(1, 0, 0, 1, 0, 0); hx.clearRect(0, 0, hc.width, hc.height); hintOn = false; } return; }
   hintOn = true; hx.setTransform(1, 0, 0, 1, 0, 0); hx.clearRect(0, 0, hc.width, hc.height); hx.setTransform(DPR, 0, 0, DPR, 0, 0);
   const cr = hc.getBoundingClientRect(), br = $('brake').getBoundingClientRect(), sc = Math.min(1.15, W / 390);
