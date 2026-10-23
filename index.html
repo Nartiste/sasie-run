@@ -62,7 +62,8 @@
   .board li.me { background: rgba(246,235,22,.28); }
   .pad { position: fixed; bottom: max(20px, env(safe-area-inset-bottom)); width: 86px; height: 86px; border-radius: 50%; border: 0; color: #fff; font: 900 16px/1 'Saira Condensed', sans-serif; letter-spacing: .08em; z-index: 4; display: none; box-shadow: 0 6px 18px rgba(0,0,0,.5), inset 0 -4px 0 rgba(0,0,0,.25); touch-action: none; }
   .pad.on { display: block; }
-  #turbo { right: 16px; color: #111; background: radial-gradient(circle at 40% 35%, #fff36a, #c9bd00 70%); }
+  #brake { display: none !important; }
+  #turbo { left: 50%; margin-left: -38px; width: 76px; height: 76px; font-size: 14px; bottom: max(12px, env(safe-area-inset-bottom)); color: #111; background: radial-gradient(circle at 40% 35%, #fff36a, #c9bd00 70%); }
   #turbo.empty { filter: grayscale(1) brightness(.65); opacity: .7; }
   #brake { left: 16px; background: radial-gradient(circle at 40% 35%, #5a5a60, #1e1e22 70%); border: 2px solid rgba(255,255,255,.25); }
   #brake.down, #turbo.down { transform: scale(.93); }
@@ -91,7 +92,7 @@
   .podium3 .p2 .b { height: 70px; background: linear-gradient(#cfd2d8, #8b8f97); color: #222; }
   .podium3 .p3 .b { height: 52px; background: linear-gradient(#d0864a, #8a4f22); }
   @media (min-height: 760px) { h1.title { font-size: 66px; } }
-  @media (min-width: 700px) { #c, #hint { left: 50%; width: 430px; transform: translateX(-50%); } .screen { left: 50%; width: 430px; transform: translateX(-50%); } #turbo { right: calc(50% - 199px); } #brake { left: calc(50% - 199px); } }
+  @media (min-width: 700px) { #c, #hint { left: 50%; width: 430px; transform: translateX(-50%); } .screen { left: 50%; width: 430px; transform: translateX(-50%); } }
 </style>
 </head>
 <body>
@@ -112,7 +113,7 @@
   <div class="kicker">Le run du mois · Pontault-Combault</div>
   <div class="stripe"></div>
   <div class="prize"><small id="prizeMonth">À gagner ce mois-ci</small><b id="prizeTxt">Un bon d'achat de 150 € en équipement</b></div>
-  <div class="how"><div><b>Glisse ← →</b><br>pour tourner</div><div><b>Frein</b><br>avant les virages</div><div><b>Turbo</b><br>jauge pleine</div><div><b>Checkpoints</b><br>+8 s</div></div>
+  <div class="how"><div><b>Pouce gauche</b><br>tourne à gauche</div><div><b>Pouce droit</b><br>tourne à droite</div><div><b>Les deux</b><br>= frein</div><div><b>Turbo</b><br>jauge pleine</div></div>
   <button class="btn" id="play">Lancer le run</button>
   <button class="btn ghost" id="podBtn">Voir le podium du mois</button>
   <p class="sub" id="leader" style="min-height:18px"></p>
@@ -613,22 +614,25 @@ function startRun() {
   buildTrack(); resetCars();
   Object.assign(G, { state: 'count', pos: 0, x: 0, speed: 0, time: 45, score: 0, dist: 0, near: 0, crashes: 0, maxKmh: 0, turboUses: 0, turbo: .35, boost: 0, coins: 0, shake: 0, flash: 0, msgs: [], lean: 0, steer: 0, count: 3.2, endT: 0, lastGate: -1, gear: 0, rpm: IDLE, parts: [] });
   G.hintT0 = G.t; G.hints = store.get('hints', 0); store.set('hints', G.hints + 1);
-  show(null); $('turbo').classList.add('on'); $('brake').classList.add('on'); AU.init(); AU.beep(false);
+  show(null); $('turbo').classList.add('on'); touchSide.clear(); updTouch(); AU.init(); AU.beep(false);
 }
 function msg(text, col, big) { G.msgs.push({ text, col: col || '#fff', t: 0, big }); if (G.msgs.length > 4) G.msgs.shift(); }
-let steerTouch = null, touchX0 = 0, touchSteer = 0; const keys = {};
+/* pilotage : pouce gauche (moitié gauche de l'écran) = tourner à gauche, pouce droit = à droite,
+   les deux en même temps = freiner */
+let touchSteer = 0, touchBrake = false, mouseDown = false; const keys = {}, touchSide = new Map();
+const sideOf = cx => { const r = cv.getBoundingClientRect(); return cx - r.left < r.width / 2 ? -1 : 1; };
+function updTouch() { let l = false, r = false; for (const v of touchSide.values()) { if (v < 0) l = true; else r = true; } touchBrake = l && r; touchSteer = touchBrake ? 0 : l ? -1 : r ? 1 : 0; }
 cv.addEventListener('touchstart', e => {
   e.preventDefault(); AU.init();
   if (G.state === 'intro') { const t0 = e.changedTouches[0], r = cv.getBoundingClientRect(); introTap(t0.clientX - r.left, t0.clientY - r.top); return; }
-  const t = e.changedTouches[0]; steerTouch = t.identifier; touchX0 = t.clientX; touchSteer = t.clientX < innerWidth / 2 ? -1 : 1;
+  for (const t of e.changedTouches) touchSide.set(t.identifier, sideOf(t.clientX)); updTouch();
 }, { passive: false });
-cv.addEventListener('touchmove', e => { e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === steerTouch) { const dx = t.clientX - touchX0; if (Math.abs(dx) > 8) touchSteer = clamp(dx / 55, -1, 1); } }, { passive: false });
-const endTouch = e => { e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === steerTouch) { steerTouch = null; touchSteer = 0; } };
+cv.addEventListener('touchmove', e => { e.preventDefault(); for (const t of e.changedTouches) if (touchSide.has(t.identifier)) touchSide.set(t.identifier, sideOf(t.clientX)); updTouch(); }, { passive: false });
+const endTouch = e => { e.preventDefault(); for (const t of e.changedTouches) touchSide.delete(t.identifier); updTouch(); };
 cv.addEventListener('touchend', endTouch, { passive: false }); cv.addEventListener('touchcancel', endTouch, { passive: false });
-let mouseDown = false;
-cv.addEventListener('mousedown', e => { AU.init(); if (G.state === 'intro') { const r = cv.getBoundingClientRect(); introTap(e.clientX - r.left, e.clientY - r.top); return; } mouseDown = true; touchX0 = e.clientX; touchSteer = e.clientX < innerWidth / 2 ? -1 : 1; });
-window.addEventListener('mousemove', e => { if (mouseDown) { const dx = e.clientX - touchX0; if (Math.abs(dx) > 8) touchSteer = clamp(dx / 55, -1, 1); } });
-window.addEventListener('mouseup', () => { mouseDown = false; touchSteer = 0; G.brake = false; $('brake').classList.remove('down'); });
+cv.addEventListener('mousedown', e => { AU.init(); if (G.state === 'intro') { const r = cv.getBoundingClientRect(); introTap(e.clientX - r.left, e.clientY - r.top); return; } mouseDown = true; touchSteer = sideOf(e.clientX); });
+window.addEventListener('mousemove', e => { if (mouseDown) touchSteer = sideOf(e.clientX); });
+window.addEventListener('mouseup', () => { mouseDown = false; touchSteer = 0; });
 window.addEventListener('keydown', e => {
   keys[e.key] = true;
   if (e.key === ' ' || e.key === 'ArrowUp') { e.preventDefault(); useTurbo(); }
@@ -708,7 +712,7 @@ function drawIntro() {
     const mx = lerp(-W * .4, cx - W * .18, easeOut((t - 3.5) / .9));
     rider(ctx, mx, fy, sc, KIT, { t, walk: t < 4.4, pose: t > 7.4 ? 'thumb' : t > 4.6 ? 'wave' : 'stand', name: t > 4.4 ? 'PILOTE SASIE' : null });
     bubble(mx - 18, fy - 235 * sc, 'Je t’explique !', clamp((t - 4.5) * 4, 0, 1) * clamp((5.9 - t) * 4, 0, 1), 1);
-    const rules = [['UN POUCE DE CHAQUE CÔTÉ', 'à droite : glisse pour tourner'], ['FREIN', 'avant les virages'], ['TURBO', 'quand la jauge est pleine'], ['CHECKPOINTS', '+8 secondes'], ['FRÔLE LES VOITURES', 'bonus de points']];
+    const rules = [['UN POUCE DE CHAQUE CÔTÉ', '‹ gauche · droite › pour tourner'], ['LES DEUX POUCES', '= frein avant les virages'], ['TURBO', 'bouton du bas, jauge pleine'], ['CHECKPOINTS', '+8 secondes'], ['FRÔLE LES VOITURES', 'bonus de points']];
     for (let i = 0; i < rules.length; i++) {
       const a = clamp((t - (4.7 + i * .2)) * 5, 0, 1); if (a <= 0) continue;
       const x0 = W * .52, y0 = H * .3 + i * H * .072, sl = (1 - easeOut(a)) * 40;
@@ -775,7 +779,7 @@ function update(dt) {
   if (G.state === 'end') { G.speed = Math.max(0, G.speed - MAXV * dt); G.pos = inc(G.pos, dt * G.speed, trackLen); G.endT += dt; updateGearbox(dt, 0); if (G.endT > 1.4 && !document.querySelector('.screen.on')) showEnd(); updateCars(dt); return; }
 
   const seg = findSeg(G.pos + playerZ), sp = G.speed / MAXV;
-  const braking = G.brake || keys.ArrowDown || keys.s;
+  const braking = G.brake || touchBrake || keys.ArrowDown || keys.s;
   const steer = keys.ArrowLeft || keys.a || keys.q ? -1 : keys.ArrowRight || keys.d ? 1 : touchSteer;
   G.steer += (steer - G.steer) * Math.min(1, dt * 12);
   G.x += dt * 2.3 * (.4 + .6 * sp) * G.steer;
@@ -815,7 +819,7 @@ function update(dt) {
     if (ahead && rel > SEG * 4) c.nearDone = false;
   }
   updateCars(dt);
-  if (G.time <= 0) { G.time = 0; G.state = 'end'; G.endT = 0; $('turbo').classList.remove('on'); $('brake').classList.remove('on'); G.brake = false; AU.beep(true); msg('TERMINÉ', '#fff', true); }
+  if (G.time <= 0) { G.time = 0; G.state = 'end'; G.endT = 0; $('turbo').classList.remove('on'); G.brake = false; touchSide.clear(); updTouch(); AU.beep(true); msg('TERMINÉ', '#fff', true); }
 }
 function updateCars(dt) {
   for (const s of segs) s.cars.length = 0;
@@ -955,7 +959,7 @@ function speedLines() {
 function rrect(x, y, w, h, r) { rrX(ctx, x, y, w, h, r); }
 /* Moto du joueur : roadster générique noir et jaune (aucun modèle réel reproduit). */
 function drawBike() {
-  const sp = G.speed / MAXV, bx = W / 2, by = H - Math.max(66, H * .08) + Math.sin(G.t * 34) * sp * 1.1;
+  const sp = G.speed / MAXV, bx = W / 2, by = H - Math.max(108, H * .13) + Math.sin(G.t * 34) * sp * 1.1;
   if (IMG.moto) {
     const w = Math.min(W * .5, H * .26), h = w * IMG.moto.height / IMG.moto.width;
     ctx.save(); ctx.translate(bx, by); ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.beginPath(); ctx.ellipse(0, 4, w * .32, w * .06, 0, 0, 7); ctx.fill();
@@ -1009,6 +1013,17 @@ function brandBand(y, h) {
   ctx.font = `italic 900 ${h * .72}px "Saira Condensed", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = INK; ctx.fillText('SASIE CENTER', 0, 0); ctx.restore();
   ctx.fillStyle = INK; for (let i = 0; i < 2; i++) { const bx = W - 30 + i * 11, cy = y + h / 2 - 1, s2 = h * .28; ctx.beginPath(); ctx.moveTo(bx, cy - s2); ctx.lineTo(bx - s2 * .8, cy); ctx.lineTo(bx, cy + s2); ctx.lineTo(bx + 5, cy + s2); ctx.lineTo(bx - s2 * .8 + 5, cy); ctx.lineTo(bx + 5, cy - s2); ctx.fill(); }
 }
+function zones() {
+  if (G.state !== 'run') return;
+  const y = H - 92, s2 = 16;
+  for (const side of [-1, 1]) {
+    const on = touchBrake || touchSteer === side || (side < 0 ? keys.ArrowLeft : keys.ArrowRight);
+    ctx.globalAlpha = on ? .55 : .16; ctx.fillStyle = on ? (touchBrake ? '#ff4a4a' : Y) : '#fff';
+    for (let i = 0; i < 2; i++) { const bx = side < 0 ? 22 + i * 14 : W - 22 - i * 14, d = -side; ctx.beginPath(); ctx.moveTo(bx + d * 0, y - s2); ctx.lineTo(bx - d * s2 * .8, y); ctx.lineTo(bx, y + s2); ctx.lineTo(bx + d * 6, y + s2); ctx.lineTo(bx - d * s2 * .8 + d * 6, y); ctx.lineTo(bx + d * 6, y - s2); ctx.fill(); }
+  }
+  if (touchBrake) { ctx.globalAlpha = .9; txt('FREIN', W / 2, H * .6, 26, '#ff4a4a', 'center', 900, true, true); }
+  ctx.globalAlpha = 1;
+}
 function hud() {
   const bandH = 30; brandBand(0, bandH); const y0 = bandH;
   const pg = ctx.createLinearGradient(0, y0, 0, y0 + 62); pg.addColorStop(0, 'rgba(0,0,0,.62)'); pg.addColorStop(1, 'rgba(0,0,0,.25)'); ctx.fillStyle = pg; ctx.fillRect(0, y0, W, 62);
@@ -1025,6 +1040,7 @@ function hud() {
   ctx.fillStyle = G.turbo >= 1 ? (Math.floor(G.t * 6) % 2 ? Y : '#ffffff') : '#c9bd00'; rrect(bx, byy + 13, Math.max(8, bw * G.turbo), 8, 4); ctx.fill();
   txt(G.turbo >= 1 ? 'TURBO PRÊT' : 'TOURS · TURBO', W / 2, byy + 33, 11, '#fff', 'center', 800, false, true);
   $('turbo').classList.toggle('empty', G.turbo < 1);
+  zones();
   let my = H * .36;
   for (const m of G.msgs) { const a = 1 - Math.max(0, (m.t - .9) / .5); ctx.globalAlpha = Math.max(0, a); txt(m.text, W / 2, my - m.t * 30, m.big ? 40 : 28, m.col, 'center', 900, true, true); ctx.globalAlpha = 1; my += m.big ? 46 : 34; }
   if (G.state === 'count') { const n = Math.ceil(G.count), f = G.count % 1; txt('SASIE CENTER', W / 2, H * .3, 30, Y, 'center', 900, true, true); txt(n > 0 ? String(n) : 'GO', W / 2, H * .42, 110 + f * 40, '#fff', 'center', 900, true, true); }
@@ -1150,14 +1166,11 @@ function thumbsHint() {
   const a = act ? clamp(1 - (el - 3.2) / .4, 0, 1) * clamp(el / .4, 0, 1) : 0;
   if (a <= 0) { if (hintOn) { hx.setTransform(1, 0, 0, 1, 0, 0); hx.clearRect(0, 0, hc.width, hc.height); hintOn = false; } return; }
   hintOn = true; hx.setTransform(1, 0, 0, 1, 0, 0); hx.clearRect(0, 0, hc.width, hc.height); hx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  const cr = hc.getBoundingClientRect(), br = $('brake').getBoundingClientRect(), sc = Math.min(1.15, W / 390);
-  const bx = br.width ? br.left - cr.left + br.width / 2 : 59, by = br.height ? br.top - cr.top + br.height / 2 : H - 63;
-  ghostThumb(bx + 4, by + 4 + Math.sin(G.t * 8) * 1.5, .42, sc, a, true);
-  hintText('POUCE ICI', bx + 22, by - 84, a); hintText('POUR FREINER', bx + 22, by - 64, a);
-  const sw = Math.sin(G.t * 2.6), rx = W * .7 + sw * W * .14, ry = H - 205;
-  ghostThumb(rx, ry, -.42 + sw * .06, sc, a, false);
-  hx.save(); hx.globalAlpha = .6 * a; hx.strokeStyle = '#fff'; hx.lineWidth = 3; hx.setLineDash([6, 7]); hx.beginPath(); hx.moveTo(W * .5, ry - 2); hx.lineTo(W * .92, ry - 2); hx.stroke(); hx.restore();
-  hintText('‹  GLISSE  ›', W * .8, ry - 92, a); hintText('POUR TOURNER', W * .8, ry - 72, a);
+  const sc = Math.min(1.1, W / 390), y = H - 120, xl = W * .16, xr = W * .84, ph = Math.floor(el * 1.25) % 3; /* 0 : gauche, 1 : droite, 2 : les deux */
+  ghostThumb(xl, y, .42, sc, a * (ph === 1 ? .45 : 1), ph !== 1);
+  ghostThumb(xr, y, -.42, sc, a * (ph === 0 ? .45 : 1), ph !== 0);
+  hintText('‹ GAUCHE', xl + 10, y - 92, a * (ph === 1 ? .5 : 1)); hintText('DROITE ›', xr - 10, y - 92, a * (ph === 0 ? .5 : 1));
+  hintText(ph === 2 ? 'LES DEUX = FREIN' : 'UN POUCE DE CHAQUE CÔTÉ', W / 2, H * .56, a);
 }
 /* ---------------- boucle ---------------- */
 function resize() { DPR = Math.min(window.devicePixelRatio || 1, 2); const r = cv.getBoundingClientRect(); W = Math.round(r.width); H = Math.round(r.height); cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR); hc.width = cv.width; hc.height = cv.height; }
