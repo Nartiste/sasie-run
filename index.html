@@ -610,27 +610,28 @@ function resetCars() {
 function startRun() {
   buildTrack(); resetCars();
   Object.assign(G, { state: 'count', pos: 0, x: 0, speed: 0, time: 45, score: 0, dist: 0, near: 0, crashes: 0, maxKmh: 0, turboUses: 0, turbo: .35, boost: 0, coins: 0, shake: 0, flash: 0, msgs: [], lean: 0, steer: 0, count: 3.2, endT: 0, lastGate: -1, gear: 0, rpm: IDLE, parts: [] });
+  G.hintT0 = G.t; G.hints = store.get('hints', 0); store.set('hints', G.hints + 1);
   show(null); $('turbo').classList.add('on'); $('brake').classList.add('on'); AU.init(); AU.beep(false);
 }
 function msg(text, col, big) { G.msgs.push({ text, col: col || '#fff', t: 0, big }); if (G.msgs.length > 4) G.msgs.shift(); }
 let steerTouch = null, touchX0 = 0, touchSteer = 0; const keys = {};
 cv.addEventListener('touchstart', e => {
   e.preventDefault(); AU.init();
-  if (G.state === 'intro') { skipIntro(); return; }
+  if (G.state === 'intro') { const t0 = e.changedTouches[0], r = cv.getBoundingClientRect(); introTap(t0.clientX - r.left, t0.clientY - r.top); return; }
   const t = e.changedTouches[0]; steerTouch = t.identifier; touchX0 = t.clientX; touchSteer = t.clientX < innerWidth / 2 ? -1 : 1;
 }, { passive: false });
 cv.addEventListener('touchmove', e => { e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === steerTouch) { const dx = t.clientX - touchX0; if (Math.abs(dx) > 8) touchSteer = clamp(dx / 55, -1, 1); } }, { passive: false });
 const endTouch = e => { e.preventDefault(); for (const t of e.changedTouches) if (t.identifier === steerTouch) { steerTouch = null; touchSteer = 0; } };
 cv.addEventListener('touchend', endTouch, { passive: false }); cv.addEventListener('touchcancel', endTouch, { passive: false });
 let mouseDown = false;
-cv.addEventListener('mousedown', e => { AU.init(); if (G.state === 'intro') { skipIntro(); return; } mouseDown = true; touchX0 = e.clientX; touchSteer = e.clientX < innerWidth / 2 ? -1 : 1; });
+cv.addEventListener('mousedown', e => { AU.init(); if (G.state === 'intro') { const r = cv.getBoundingClientRect(); introTap(e.clientX - r.left, e.clientY - r.top); return; } mouseDown = true; touchX0 = e.clientX; touchSteer = e.clientX < innerWidth / 2 ? -1 : 1; });
 window.addEventListener('mousemove', e => { if (mouseDown) { const dx = e.clientX - touchX0; if (Math.abs(dx) > 8) touchSteer = clamp(dx / 55, -1, 1); } });
 window.addEventListener('mouseup', () => { mouseDown = false; touchSteer = 0; G.brake = false; $('brake').classList.remove('down'); });
 window.addEventListener('keydown', e => {
   keys[e.key] = true;
   if (e.key === ' ' || e.key === 'ArrowUp') { e.preventDefault(); useTurbo(); }
   if (e.key === 'ArrowDown') e.preventDefault();
-  if (e.key === 'Enter') { if (G.state === 'gate') enterGate(); else if (G.state === 'intro') skipIntro(); }
+  if (e.key === 'Enter') { if (G.state === 'gate') enterGate(); else if (G.state === 'intro') { if (G.introHold) releaseHold(); else skipIntro(); } }
 });
 window.addEventListener('keyup', e => { keys[e.key] = false; });
 const bk = $('brake');
@@ -642,11 +643,21 @@ function useTurbo() { if (G.state !== 'run' || G.turbo < 1 || G.boost > 0) retur
 
 /* ---------------- intro animée ---------------- */
 const INTRO_LEN = 11.6;
-function enterGate() { AU.init(); G.state = 'intro'; G.introT = 0; G.rpm = IDLE; show(null); }
+function enterGate() { AU.init(); G.state = 'intro'; G.introT = 0; G.rpm = IDLE; G.introHold = false; G.holdIdx = 0; show(null); }
 $('gate').addEventListener('click', enterGate);
+/* règles présentées une par une : l'intro s'arrête sur chaque règle, le joueur appuie sur « Suivant » */
+const HOLDS = [5.0, 5.55, 6.1, 6.65, 7.2];
+function releaseHold() { if (!G.introHold) return; G.introHold = false; G.holdIdx++; AU.blip(); }
+function introTap(x, y) {
+  if (x > W - 150 && y > H - 54) { skipIntro(); return; }   /* « Passer l'intro » en bas à droite */
+  if (G.introHold) releaseHold();
+}
 function skipIntro() { if (G.introT < .4) return; G.state = 'menu'; show('start'); AU.engine(IDLE, 0, false); }
 function updateIntro(dt) {
-  const prev = G.introT; G.introT += dt; const t = G.introT;
+  const prev = G.introT;
+  if (G.introHold) dt = 0;
+  else if (G.holdIdx < HOLDS.length && prev + dt >= HOLDS[G.holdIdx]) { dt = HOLDS[G.holdIdx] - prev; G.introHold = true; }
+  G.introT += dt; const t = G.introT;
   let target = IDLE + 200;
   if (t > .6 && t < 1.1) target = 11500; else if (t > 1.1 && t < 1.5) target = 4200; else if (t > 1.9 && t < 2.2) target = 8000;
   else if (t > 7.5 && t < 7.9) target = 12500; else if (t > 8.6 && t < 9.1) target = 10500; else if (t > 9.1 && t < 9.5) target = 3500;
@@ -698,10 +709,16 @@ function drawIntro() {
     for (let i = 0; i < rules.length; i++) {
       const a = clamp((t - (4.7 + i * .55)) * 4, 0, 1); if (a <= 0) continue;
       const x0 = W * .52, y0 = H * .3 + i * H * .072, sl = (1 - easeOut(a)) * 40;
-      ctx.globalAlpha = a; ctx.save(); ctx.translate(x0 + sl, y0); ctx.transform(1, 0, -.18, 1, 0, 0); ctx.fillStyle = INK; ctx.fillRect(-8, -22, W * .47, 44); ctx.fillStyle = Y; ctx.fillRect(-8, -22, 6, 44); ctx.restore();
+      const curr = G.introHold && i === G.holdIdx; ctx.globalAlpha = a * (G.introHold && i < G.holdIdx ? .55 : 1); ctx.save(); ctx.translate(x0 + sl, y0); ctx.transform(1, 0, -.18, 1, 0, 0); ctx.fillStyle = INK; ctx.fillRect(-8, -22, W * .47, 44); ctx.fillStyle = Y; ctx.fillRect(-8, -22, curr ? W * .47 : 6, curr ? 3 : 44); if (curr) { ctx.fillRect(-8, 19, W * .47, 3); ctx.fillRect(-8, -22, 6, 44); } ctx.restore();
       txt(rules[i][0], x0 + sl + 6, y0 - 7, 17, Y, 'left', 900, true); ctx.font = '600 11px Inter, sans-serif'; ctx.fillStyle = '#ddd'; ctx.textAlign = 'left'; ctx.fillText(rules[i][1], x0 + sl + 6, y0 + 11); ctx.globalAlpha = 1;
     }
     chip('LE MEILLEUR SCORE DU MOIS GAGNE', H * .83, clamp((t - 7.5) * 4, 0, 1), true);
+    if (G.introHold) {
+      const last = G.holdIdx === HOLDS.length - 1, lbl = last ? 'C’EST PARTI ›' : 'SUIVANT ›', pulse = 1 + Math.sin(G.t * 6) * .04, bw = W * .62, by = H * .86;
+      ctx.save(); ctx.translate(cx, by); ctx.scale(pulse, pulse); ctx.transform(1, 0, -.18, 1, 0, 0); ctx.fillStyle = Y; ctx.fillRect(-bw / 2, -26, bw, 52); ctx.restore();
+      txt(lbl, cx, by + 1, 24, INK, 'center', 900, true);
+      txt((G.holdIdx + 1) + ' / ' + HOLDS.length, cx, by + 42, 13, 'rgba(255,255,255,.7)', 'center', 700);
+    }
     if (t > 8.3) { ctx.fillStyle = `rgba(17,17,17,${(t - 8.3) / .3})`; ctx.fillRect(0, 0, W, H); }
   } else {
     /* scène 3 : le lot du mois */
@@ -723,7 +740,7 @@ function drawIntro() {
     bubble(cx + 70, H * .9 - 240 * Math.min(1.2, H / 640), 'Prêt pour le run ?', clamp((u - .8) * 4, 0, 1), -1);
   }
   brandBand(0, 30);
-  txt('Touche pour passer ›', W - 14, H - 18, 13, t > 8.6 ? 'rgba(0,0,0,.55)' : 'rgba(255,255,255,.55)', 'right', 700);
+  txt('Passer l’intro ›', W - 14, H - 18, 13, t > 8.6 ? 'rgba(0,0,0,.6)' : 'rgba(255,255,255,.6)', 'right', 700);
   const fade = clamp((t - (INTRO_LEN - .35)) / .35, 0, 1); if (fade > 0) { ctx.fillStyle = `rgba(0,0,0,${fade})`; ctx.fillRect(0, 0, W, H); }
 }
 
@@ -990,6 +1007,22 @@ function brandBand(y, h) {
   ctx.font = `italic 900 ${h * .72}px "Saira Condensed", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = INK; ctx.fillText('SASIE CENTER', 0, 0); ctx.restore();
   ctx.fillStyle = INK; for (let i = 0; i < 2; i++) { const bx = W - 30 + i * 11, cy = y + h / 2 - 1, s2 = h * .28; ctx.beginPath(); ctx.moveTo(bx, cy - s2); ctx.lineTo(bx - s2 * .8, cy); ctx.lineTo(bx, cy + s2); ctx.lineTo(bx + 5, cy + s2); ctx.lineTo(bx - s2 * .8 + 5, cy); ctx.lineTo(bx + 5, cy - s2); ctx.fill(); }
 }
+/* aide à la prise en main : deux pouces en transparence, un de chaque côté,
+   pendant le compte à rebours et les premières secondes (3 premières parties) */
+function thumbsHint() {
+  if (!(G.hints < 3) || (G.state !== 'count' && G.state !== 'run')) return;
+  const el = G.t - G.hintT0, a = clamp(1 - (el - 7.2) / 1.2, 0, 1) * clamp(el / .4, 0, 1); if (a <= 0) return;
+  const y = H - 158, sway = Math.sin(G.t * 3.2) * 16, xl = W * .17, xr = W * .83;
+  ctx.save(); ctx.globalAlpha = .5 * a; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = '66px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+  ctx.save(); ctx.translate(xl + sway, y); ctx.scale(-1, 1); ctx.fillText('👍', 0, 0); ctx.restore();
+  ctx.fillText('👍', xr + sway, y);
+  ctx.restore();
+  ctx.globalAlpha = a;
+  txt('‹  GLISSE POUR TOURNER  ›', W / 2, H - Math.max(66, H * .08) - Math.min(W, H * .62) / 540 * 360, 17, '#fff', 'center', 800, true, true);
+  txt('FREIN ↓', xl, y + 46, 13, '#fff', 'center', 800, false, true); txt('TURBO ↓', xr, y + 46, 13, '#fff', 'center', 800, false, true);
+  ctx.globalAlpha = 1;
+}
 function hud() {
   const bandH = 30; brandBand(0, bandH); const y0 = bandH;
   const pg = ctx.createLinearGradient(0, y0, 0, y0 + 62); pg.addColorStop(0, 'rgba(0,0,0,.62)'); pg.addColorStop(1, 'rgba(0,0,0,.25)'); ctx.fillStyle = pg; ctx.fillRect(0, y0, W, 62);
@@ -1008,6 +1041,7 @@ function hud() {
   $('turbo').classList.toggle('empty', G.turbo < 1);
   let my = H * .36;
   for (const m of G.msgs) { const a = 1 - Math.max(0, (m.t - .9) / .5); ctx.globalAlpha = Math.max(0, a); txt(m.text, W / 2, my - m.t * 30, m.big ? 40 : 28, m.col, 'center', 900, true, true); ctx.globalAlpha = 1; my += m.big ? 46 : 34; }
+  thumbsHint();
   if (G.state === 'count') { const n = Math.ceil(G.count), f = G.count % 1; txt('SASIE CENTER', W / 2, H * .3, 30, Y, 'center', 900, true, true); txt(n > 0 ? String(n) : 'GO', W / 2, H * .42, 110 + f * 40, '#fff', 'center', 900, true, true); }
 }
 
